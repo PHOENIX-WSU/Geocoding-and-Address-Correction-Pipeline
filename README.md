@@ -11,6 +11,16 @@ TODO:
 - Python 3.8 or higher
 - USPS API credentials (Consumer Key and Consumer Secret)
 
+## How to get USPS API Key
+1. Go to the USPS website and make an account: https://developer.usps.com/
+2. Go to the USPS Web Tools APIs: https://www.usps.com/business/web-tools-apis/welcome.htm?msockid=33097f2acda666c801436a2fccb567f9
+4. Click Sign Up for USPS APIs
+5. You will get a link in your email to complete email validation
+6. You will get an email with the code that you need to enter to complete the login request
+7. Click on the Apps tab and then click "Add App"
+8. Enter the name for the app and enable Public Access I (no need for callback URL or description)
+9. Click on the app name and scroll down to view the consumer key and consumer secret in the Credentials section
+
 ## Installation
 
 1. Clone this repository:
