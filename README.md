@@ -1,4 +1,4 @@
-Validates and corrects the address
+Validates and corrects the address using USPS API (v3)
 
 TODO:
 - Test more examples
