@@ -1,5 +1,18 @@
 # Importing necessary packages
 from usps import USPSApi, Address
+# ! Remove username and add os.env
+import os
+import sys
+from dotenv import load_dotenv
+
+load_dotenv()
+
+USPS_USER_ID = os.getenv("USPS_USER_ID")
+
+if not USPS_USER_ID:
+    print("Please enter the API key in .env file")
+    sys.exit()
+
 
 def clean_address(usps_client, address_info):
     """
@@ -44,7 +57,6 @@ def clean_address(usps_client, address_info):
 
 # --- Main part of the script ---
 if __name__ == "__main__":
-    USPS_USER_ID = "NaitikiBioPhoenix"
 
     # Initialize the USPS API client with your User ID
     client = USPSApi(USPS_USER_ID)
