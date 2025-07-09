@@ -15,8 +15,8 @@ TODO:
 
 1. Clone this repository:
    ```powershell
-   git clone https://github.com/yourusername/Address-Correction.git
-   cd Address-Correction
+   git clone https://github.com/PHOENIX-WSU/Address-Validation-Tool
+   cd Address-Validation-Tool
    ```
 
 2. Set up a Python virtual environment using `venv`:
