@@ -1,105 +1,127 @@
-# Importing necessary packages
-from usps import USPSApi, Address
-# ! Remove username and add os.env
+import requests
+import json
 import os
 import sys
 from dotenv import load_dotenv
 
 load_dotenv()
 
-USPS_USER_ID = os.getenv("USPS_USER_ID")
+CONSUMER_KEY = os.getenv("CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")
 
-if not USPS_USER_ID:
-    print("Please enter the API key in .env file")
+if not CONSUMER_KEY:
+    print("Please enter the CONSUMER_KEY in .env file")
     sys.exit()
 
+if not CONSUMER_SECRET:
+    print("Please enter the CONSUMER_SECRET in .env file")
+    sys.exit()
 
-def clean_address(usps_client, address_info):
+TOKEN_URL = "https://apis.usps.com/oauth2/v3/token"
+ADDRESS_API_URL = "https://apis.usps.com/addresses/v3/address"
+
+
+def get_access_token(client_id, client_secret):
     """
-    Takes a USPS API client and address components, validates the address,
-    and returns the cleaned version.
-
-    Args:
-        usps_client (USPSApi): The instance of the USPSApi client.
-        address_info (dict): A dictionary containing address components.
-
-    Returns:
-        str: A formatted string of the cleaned address or an error message.
+    Gets an OAuth 2.0 access token from the USPS API.
     """
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+    }
+    
+    print("Requesting access token...")
     try:
-        # Create an Address object using the provided information
-        # The library is smart enough to handle missing pieces.
-        address = Address(
-            street_1=address_info.get("street_1"),
-            city=address_info.get("city"),
-            state=address_info.get("state"),
-            zip_code=address_info.get("zip_code")
-        )
+        response = requests.post(TOKEN_URL, headers=headers, json=data)
+        # Raise an exception if the request was not successful
+        response.raise_for_status() 
+        
+        token_data = response.json()
+        print("Successfully received access token!")
+        return token_data.get("access_token")
+        
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error getting token: {e.response.status_code} {e.response.text}")
+    except Exception as e:
+        print(f"An error occurred getting token: {e}")
+        
+    return None
 
-        # Call the USPS API to validate and standardize the address
-        validation_result = usps_client.validate_address(address)
 
-        # The cleaned address is in the 'result' attribute
-        cleaned_address = validation_result.result['Address']
+def clean_single_address(access_token, address_info):
+    """
+    Validates a single address using the USPS Address v3 API.
+    """
+    if not access_token:
+        return "Cannot validate address without an access token."
 
-        # Format the cleaned address into a readable string
+    # Set up the headers with the bearer token
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+    }
+
+    # Map our dictionary to the API's expected query parameters
+    params = {
+        "streetAddress": address_info.get("street_1"),
+        "city": address_info.get("city"),
+        "state": address_info.get("state"),
+        "ZIPCode": address_info.get("zip_code"),
+    }
+    
+    try:
+        response = requests.get(ADDRESS_API_URL, headers=headers, params=params)
+        response.raise_for_status()
+        
+        cleaned_data = response.json()
+        
+        # The main address data is inside the 'address' key
+        address_part = cleaned_data.get("address", {})
+        
+        # Format the address for display
         formatted_address = (
-            f"{cleaned_address['Street1']} "
-            f"{cleaned_address.get('Street2', '')}\n"
-            f"{cleaned_address['City']}, {cleaned_address['State']} "
-            f"{cleaned_address['Zip5']}-{cleaned_address['Zip4']}"
+            f"{address_part.get('streetAddress', '')}\n"
+            f"{address_part.get('city', '')}, {address_part.get('state', '')} "
+            f"{address_part.get('ZIPCode', '')}-{address_part.get('ZIPPlus4', '')}"
         )
         return formatted_address
 
+    except requests.exceptions.HTTPError as e:
+        # The API might return a 404 for a bad address, which is useful info
+        if e.response.status_code == 404:
+            return f"Address not found or invalid. API Response: {e.response.json().get('error')}"
+        return f"HTTP Error cleaning address: {e.response.status_code} {e.response.text}"
     except Exception as e:
-        # Handle cases where the address might be invalid or an API error occurs
-        return f"Could not validate address. Error: {e}"
+        return f"An error occurred cleaning address: {e}"
+
 
 # --- Main part of the script ---
 if __name__ == "__main__":
+    # 1. Get the access token
+    token = get_access_token(CONSUMER_KEY, CONSUMER_SECRET)
 
-    # Initialize the USPS API client with your User ID
-    client = USPSApi(USPS_USER_ID)
+    # 2. Proceed only if we have a token
+    if token:
+        # Your list of messy Michigan addresses
+        messy_addresses = [
+            {
+                "street_1": "4500 Cas Ave",  # Misspelled "Street"
+                "city": "Detroit",
+                "state": "MI",
+                "city": "48201"
+            },
+        ]
 
-    # Here is your list of messy Michigan addresses.
-    # Add your addresses to this list to process them.
-    messy_addresses = [
-        {
-            "street_1": "123 N Main Stret", # Misspelled "Street"
-            "city": "Ann Arbor",
-            "state": "MI"
-        },
-        {
-            "street_1": "4400 vernor hwy", # Lowercase, no street type
-            "city": "detroit",
-            "state": "MI",
-            "zip_code": "48209"
-        },
-        {
-            "street_1": "Comerica Park", # A landmark name
-            "city": "Detroit",
-            "state": "MI"
-        },
-        {
-            "street_1": "25 Roomis Street", # Misspelled "Loomis"
-            "zip_code": "49507", # Zip code provided, but no city
-            "state": "MI"
-        },
-        {
-            "street_1": "999 Fake Address Ln", # An address that likely doesn't exist
-            "city": "Nowhere",
-            "state": "MI"
-        }
-    ]
+        print("\n--- Starting Address Cleaning Process ---\n")
 
-    print("--- Starting Address Cleaning Process ---\n")
-
-    # Loop through each messy address and clean it
-    for i, addr in enumerate(messy_addresses):
-        print(f"Original Address #{i+1}: {addr}")
-        
-        # Call our cleaning function
-        cleaned = clean_address(client, addr)
-        
-        print(f"Cleaned Address #{i+1}: \n{cleaned}")
-        print("-" * 20)
+        # Loop through each messy address and clean it
+        for i, addr in enumerate(messy_addresses):
+            print(f"Original Address #{i+1}: {addr}")
+            
+            # Call our cleaning function
+            cleaned = clean_single_address(token, addr)
+            
+            print(f"Cleaned Address #{i+1}:\n{cleaned}")
+            print("-" * 20)
