@@ -77,7 +77,7 @@ def clean_single_address(access_token, address_info):
 if __name__ == "__main__":
     
     input_csv_path = "Data\patientDemographicstest.csv"
-    output_csv_path = "Data\patientDemographicstestOutput.csv"
+    output_csv_path = "Data\patientDemographicstestOutputAdvanced.csv"
 
     if not os.path.exists(input_csv_path):
         print(f"❌ Error: Input file not found at '{input_csv_path}'")
