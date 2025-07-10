@@ -5,6 +5,9 @@ A Python utility that validates and corrects US addresses using the USPS API (v3
 TODO:
 - Test more examples
 - Automate the script for multiple address (i.e. read from the files)
+- Add more advanced Fuzzy matching
+  - Zip, City, State, Last name and Address (50%) match
+  - Auto clean zip codes in wrong places
 
 ## Prerequisites
 
