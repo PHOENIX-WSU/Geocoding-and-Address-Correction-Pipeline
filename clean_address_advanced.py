@@ -12,11 +12,11 @@ CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")
 
 # Check if the keys exist and exit if they don't
 if not CONSUMER_KEY:
-    print("❌ Error: CONSUMER_KEY not found in .env file.")
+    print("Error: CONSUMER_KEY not found in .env file.")
     sys.exit()
 
 if not CONSUMER_SECRET:
-    print("❌ Error: CONSUMER_SECRET not found in .env file.")
+    print("Error: CONSUMER_SECRET not found in .env file.")
     sys.exit()
 
 # API endpoints
@@ -33,12 +33,12 @@ def get_access_token(client_id, client_secret):
         response = requests.post(TOKEN_URL, headers=headers, json=data)
         response.raise_for_status()
         token_data = response.json()
-        print("✅ Successfully received access token!")
+        print("Successfully received access token!")
         return token_data.get("access_token")
     except requests.exceptions.HTTPError as e:
-        print(f"❌ HTTP Error getting token: {e.response.status_code} {e.response.text}")
+        print(f"HTTP Error getting token: {e.response.status_code} {e.response.text}")
     except Exception as e:
-        print(f"❌ An error occurred getting token: {e}")
+        print(f"An error occurred getting token: {e}")
     return None
 
 
@@ -72,10 +72,10 @@ def clean_single_address(access_token, address_info):
 if __name__ == "__main__":
     
     input_csv_path = "Data\patientDemographicstest.csv"
-    output_csv_path = "Data\patientDemographicstestOutput.csv"
+    output_csv_path = "Data\patientDemographicstestOutputAdvanced.csv"
 
     if not os.path.exists(input_csv_path):
-        print(f"❌ Error: Input file not found at '{input_csv_path}'")
+        print(f"Error: Input file not found at '{input_csv_path}'")
     else:
         # 1. Get the access token using credentials from .env
         token = get_access_token(CONSUMER_KEY, CONSUMER_SECRET)
@@ -130,4 +130,4 @@ if __name__ == "__main__":
 
             # 6. Save the results
             df.to_csv(output_csv_path, index=False)
-            print(f"\n✅ All done! Cleaned data saved to '{output_csv_path}'.")
+            print(f"\nAll done! Cleaned data saved to '{output_csv_path}'.")

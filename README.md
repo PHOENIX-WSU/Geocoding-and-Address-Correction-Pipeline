@@ -45,10 +45,10 @@ TODO:
 3. Install dependencies:
    ```powershell
    # If using pip
-   pip install requests python-dotenv pandas
+   pip install requests python-dotenv pandas thefuzz python-Levenshtein
 
    # If using uv
-   uv pip install requests python-dotenv pandas
+   uv pip install requests python-dotenv pandas thefuzz python-Levenshtein
    ```
 
 ## Configuration
