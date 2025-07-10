@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import sys
 from dotenv import load_dotenv
+from thefuzz import fuzz # <-- ADDED: For fuzzy string matching
 
 # --- Load credentials from .env file ---
 load_dotenv()
@@ -43,9 +44,13 @@ def get_access_token(client_id, client_secret):
 
 
 def clean_single_address(access_token, address_info):
-    """Validates a single address and returns the parsed JSON response."""
+    """
+    Validates a single address.
+    
+    MODIFIED: Returns a tuple (json_response, status_message).
+    """
     if not access_token:
-        return None
+        return None, "Skipped - No Access Token"
 
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     params = {
@@ -59,30 +64,32 @@ def clean_single_address(access_token, address_info):
     try:
         response = requests.get(ADDRESS_API_URL, headers=headers, params=params)
         response.raise_for_status()
-        return response.json()
+        return response.json(), "Success" # Return JSON and a success message
     except requests.exceptions.HTTPError as e:
-        print(f"   - API Error for address '{params.get('streetAddress')}': {e.response.status_code}")
-        return None
+        # Return None and a detailed error message
+        status_code = e.response.status_code
+        print(f"   - API Error for address '{params.get('streetAddress')}': {status_code}")
+        return None, f"API Error: {status_code}"
     except Exception as e:
         print(f"   - An unknown error occurred cleaning address: {e}")
-        return None
+        return None, "Unknown Error"
 
 
 # --- Main part of the script ---
 if __name__ == "__main__":
     
-    input_csv_path = "Data\patientDemographicstest.csv"
-    output_csv_path = "Data\patientDemographicstestOutputAdvanced.csv"
+    input_csv_path = "Data\\patientDemographicstest.csv"
+    output_csv_path = "Data\\patientDemographicstestOutputAdvanced.csv"
 
     if not os.path.exists(input_csv_path):
         print(f"Error: Input file not found at '{input_csv_path}'")
     else:
-        # 1. Get the access token using credentials from .env
+        # 1. Get the access token
         token = get_access_token(CONSUMER_KEY, CONSUMER_SECRET)
 
         if token:
-            # 2. Read the CSV file
-            df = pd.read_csv(input_csv_path)
+            # 2. Read and prepare the CSV file
+            df = pd.read_csv(input_csv_path, dtype={"demo_zip": str}) # Read zip as string
             df = df.dropna(subset=["demo_address"])
             print(f"\nRead {len(df)} rows from '{input_csv_path}'. Starting cleaning process...")
 
@@ -91,31 +98,27 @@ if __name__ == "__main__":
             for col in new_cols:
                 df[col] = None
 
-            # 4. Loop through each row
+            # 4. Loop through each row to call the API
             for index, row in df.iterrows():
                 
-                # --- MODIFICATION START ---
-                # Get the zip code from the row and convert it to a string.
-                # This prevents errors if pandas reads it as a number (e.g., float).
-                raw_zip = str(row.get("demo_zip", ""))
-                
-                # The API requires a 5-digit ZIP. We take the first 5 characters
-                # to handle formats like '123456789' or '12345-6789'.
-                zip_for_api = raw_zip[:5]
-                # --- MODIFICATION END ---
+                raw_zip = row.get("demo_zip", "")
+                zip_for_api = raw_zip[:5] if isinstance(raw_zip, str) else ""
                 
                 address_to_clean = {
                     "street_1": row.get("demo_address"),
                     "street_2": row.get("demo_address2"),
                     "city": row.get("demo_city"),
                     "state": row.get("demo_state"),
-                    "zip_code": zip_for_api # Use the cleaned 5-digit zip
+                    "zip_code": zip_for_api
                 }
                 
-                cleaned_data = clean_single_address(token, address_to_clean)
+                # MODIFIED: Unpack the data and the status message
+                cleaned_data, status = clean_single_address(token, address_to_clean)
 
-                # 5. Populate the new columns
-                if cleaned_data and 'address' in cleaned_data:
+                df.loc[index, 'api_status'] = status # Store the detailed status
+
+                # 5. Populate the new columns on success
+                if status == 'Success' and cleaned_data and 'address' in cleaned_data:
                     address_part = cleaned_data.get("address", {})
                     df.loc[index, 'cleaned_street_address'] = address_part.get('streetAddress')
                     df.loc[index, 'cleaned_secondary_address'] = address_part.get('secondaryAddress')
@@ -123,11 +126,55 @@ if __name__ == "__main__":
                     df.loc[index, 'cleaned_state'] = address_part.get('state')
                     df.loc[index, 'cleaned_zip'] = address_part.get('ZIPCode')
                     df.loc[index, 'cleaned_zip_plus_4'] = address_part.get('ZIPPlus4')
-                    df.loc[index, 'api_status'] = 'Success'
                     print(f"   - Cleaned address for row {index + 1}")
-                else:
-                    df.loc[index, 'api_status'] = 'Failed'
 
-            # 6. Save the results
+            # --- NEW SECTION: POST-PROCESSING TO MATCH FAILED ROWS ---
+            print("\nStarting post-processing to match failed rows...")
+            
+            # Isolate rows that failed with a 400 error and those that succeeded
+            failed_df = df[df['api_status'] == 'API Error: 400'].copy()
+            success_df = df[df['api_status'] == 'Success'].copy()
+            
+            match_count = 0
+
+            # Loop through each failed row
+            for failed_index, failed_row in failed_df.iterrows():
+                
+                # Find successful rows with the same last name, zip, state, and city
+                potential_matches = success_df[
+                    (success_df['demo_lastname'] == failed_row['demo_lastname']) &
+                    (success_df['demo_zip'] == failed_row['demo_zip']) &
+                    (success_df['demo_state'] == failed_row['demo_state']) &
+                    (success_df['demo_city'] == failed_row['demo_city'])
+                ]
+
+                # Now check for address similarity
+                for _, match_row in potential_matches.iterrows():
+                    
+                    # Ensure addresses are strings before comparing
+                    addr1 = str(failed_row.get('demo_address', ''))
+                    addr2 = str(match_row.get('demo_address', ''))
+                    
+                    # Calculate similarity ratio (0-100)
+                    similarity_ratio = fuzz.ratio(addr1, addr2)
+                    
+                    if similarity_ratio > 50:
+                        # If a good match is found, copy the cleaned data
+                        for col in new_cols:
+                            if col.startswith('cleaned_'):
+                                df.loc[failed_index, col] = match_row[col]
+                        
+                        # Update the status
+                        df.loc[failed_index, 'api_status'] = 'Matched on Lastname'
+                        match_count += 1
+                        print(f"   - Found a match for row {failed_index + 1}")
+                        
+                        # Stop searching for this failed row and move to the next
+                        break 
+            
+            print(f"Found and corrected {match_count} failed rows through matching.")
+            # --- END OF NEW SECTION ---
+
+            # 6. Save the final results
             df.to_csv(output_csv_path, index=False)
             print(f"\nAll done! Cleaned data saved to '{output_csv_path}'.")
