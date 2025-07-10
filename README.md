@@ -21,10 +21,6 @@ TODO:
 8. Enter the name for the app and enable Public Access I (no need for callback URL or description)
 9. Click on the app name and scroll down to view the consumer key and consumer secret in the Credentials section
 
-## Storing the API key
-In this repository, you will find a file named .env.example, save it as .env in your main folder and add the keys to the respective variables (include the double quotes)
-Make sure if you are uploading this code to GitHub, add the .env in .gitignore, it is always a good practice to use .env files
-
 ## Installation
 
 1. Clone this repository:
@@ -42,17 +38,17 @@ Make sure if you are uploading this code to GitHub, add the .env in .gitignore, 
    Alternatively, you can use `uv` (a faster alternative to venv):
    ```powershell
    pip install uv
-   uv venv
+   uv venv --python 3.11
    .\venv\Scripts\Activate
    ```
 
 3. Install dependencies:
    ```powershell
    # If using pip
-   pip install requests python-dotenv
+   pip install requests python-dotenv pandas
 
    # If using uv
-   uv pip install requests python-dotenv
+   uv pip install requests python-dotenv pandas
    ```
 
 ## Configuration
