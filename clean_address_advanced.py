@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
         if token:
             # 2. Read and prepare the CSV
-            df = pd.read_csv(input_csv_path, dtype=str).fillna('')
+            df = pd.read_csv(input_csv_path)
             df = df.dropna(subset=["demo_address"])
             print(f"\nRead {len(df)} rows from '{input_csv_path}'. Starting cleaning process...")
 
