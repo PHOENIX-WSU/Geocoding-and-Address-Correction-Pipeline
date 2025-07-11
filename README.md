@@ -48,10 +48,10 @@ TODO:
 3. Install dependencies:
    ```powershell
    # If using pip
-   pip install requests python-dotenv pandas thefuzz python-Levenshtein
+   pip install requests python-dotenv pandas thefuzz python-Levenshtein google-generativeai
 
    # If using uv
-   uv pip install requests python-dotenv pandas thefuzz python-Levenshtein
+   uv pip install requests python-dotenv pandas thefuzz python-Levenshtein google-generativeai
    ```
 
 ## Configuration
