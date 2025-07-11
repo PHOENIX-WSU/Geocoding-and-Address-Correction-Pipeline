@@ -92,6 +92,15 @@ The script handles various error cases:
 - API connection issues
 - Rate limiting
 
+## Scores
+**Tools**|**Score Test-Set (Updated Prompt)**
+-----|-----
+Plain (no genAI)|92.68%
+gemma3:12b + gemini-1.5-flash-latest|95.20%
+gemma3:12b + gemini-2.0-flash|95.45%
+gemma3:12b + gemini-2.5-flash|95.45%
+gemma3:12b + gemma-3-27b-it|95.20%
+
 ## Contributing
 
 Feel free to submit issues and enhancement requests!

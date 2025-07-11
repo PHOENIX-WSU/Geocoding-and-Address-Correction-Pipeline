@@ -166,8 +166,8 @@ def populate_cleaned_columns(df, index, address_part):
 # --- Main part of the script ---
 if __name__ == "__main__":
     
-    input_csv_path = "Data/patientDemographicstest.csv"
-    output_csv_path = "Data/patientDemographicstestOutputAdvanced.csv"
+    input_csv_path = "Data/patientDEMOGRAPHICS-11th-July-2025.csv"
+    output_csv_path = "Data/patientDEMOGRAPHICS-11th-July-2025-Output.csv"
 
     if not os.path.exists(input_csv_path):
         print(f"Error: Input file not found at '{input_csv_path}'")
