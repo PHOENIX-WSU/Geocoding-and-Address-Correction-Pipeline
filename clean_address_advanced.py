@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import sys
 import time
-import json # <-- ADDED
+import json
 from dotenv import load_dotenv
 from thefuzz import fuzz
 import google.generativeai as genai
@@ -194,6 +194,10 @@ if __name__ == "__main__":
                 }
                 cleaned_data, status = clean_single_address(token, address_to_clean)
                 df.loc[index, 'api_status'] = status
+
+                # Sleep to stay under API limit
+                time.sleep(0.15) 
+                
                 if status == 'Success' and cleaned_data and 'address' in cleaned_data:
                     populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
                     print(f"   - Cleaned address for row {index + 1}")
@@ -211,6 +215,9 @@ if __name__ == "__main__":
                     new_address = 'PO Box ' + ' '.join(parts[1:])
                     address_to_clean = {"street_1": new_address, "street_2": row.get("demo_address2"), "city": row.get("demo_city"), "state": row.get("demo_state"), "zip_code": str(row.get("demo_zip", ""))[:5]}
                     cleaned_data, status = clean_single_address(token, address_to_clean)
+
+                    time.sleep(0.15)
+                    
                     if status == 'Success':
                         retry_count_po += 1
                         df.loc[index, 'api_status'] = 'Success (Corrected PO Box)'
@@ -230,6 +237,9 @@ if __name__ == "__main__":
                     if misplaced_zip:
                         address_to_clean = {"street_1": row.get("demo_address"), "street_2": "" if source_col_name == 'demo_address2' else row.get("demo_address2"), "city": "" if source_col_name == 'demo_city' else row.get("demo_city"), "state": "" if source_col_name == 'demo_state' else row.get("demo_state"), "zip_code": misplaced_zip}
                         cleaned_data, status = clean_single_address(token, address_to_clean)
+                        
+                        time.sleep(0.15)
+                        
                         if status == 'Success':
                             retry_count_zip += 1
                             df.loc[index, 'demo_zip'], df.loc[index, source_col_name] = misplaced_zip, ''
@@ -266,6 +276,9 @@ if __name__ == "__main__":
                 corrected_dict = correct_address_with_local_ai(original_row_data)
                 if corrected_dict:
                     cleaned_data, status = clean_single_address(token, corrected_dict)
+                    
+                    time.sleep(0.15)
+                    
                     if status == 'Success':
                         print("    - SUCCESS: Local model suggestion was validated by USPS.")
                         ai_correction_count += 1
@@ -280,6 +293,9 @@ if __name__ == "__main__":
                 corrected_dict = correct_address_with_google_ai(gemini_flash_model, original_row_data)
                 if corrected_dict:
                     cleaned_data, status = clean_single_address(token, corrected_dict)
+                    
+                    time.sleep(0.15)
+                    
                     if status == 'Success':
                         print("    - SUCCESS: Gemini Flash suggestion was validated by USPS.")
                         ai_correction_count += 1
