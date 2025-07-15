@@ -18,10 +18,6 @@ CONSUMER_SECRET = os.getenv("CONSUMER_SECRET")
 # Google AI Key
 GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
 
-# Local AI Model Config
-LOCAL_API_ENDPOINT = "http://localhost:11434/v1/chat/completions"
-LOCAL_MODEL_NAME = "gemma3:12b"
-
 # Validate keys
 if not CONSUMER_KEY or not CONSUMER_SECRET:
     print("Error: USPS CONSUMER_KEY or CONSUMER_SECRET not found in .env file.")
@@ -42,7 +38,7 @@ TOKEN_URL = "https://apis.usps.com/oauth2/v3/token"
 ADDRESS_API_URL = "https://apis.usps.com/addresses/v3/address"
 
 
-# --- NEW: Rate Limiter Class ---
+# --- Rate Limiter Class ---
 class RateLimiter:
     """A class to enforce a specific number of requests per hour."""
     def __init__(self, requests_per_hour):
@@ -53,28 +49,22 @@ class RateLimiter:
     def wait(self):
         """Pauses the script if the rate limit has been reached."""
         current_time = time.time()
-
-        # Remove timestamps older than the period
         while self.request_timestamps and self.request_timestamps[0] <= current_time - self.period:
             self.request_timestamps.popleft()
 
         if len(self.request_timestamps) >= self.max_requests:
-            # Time of the oldest request in the current window
             oldest_request_time = self.request_timestamps[0]
-            # Time we must wait until this oldest request "expires"
             time_to_wait = (oldest_request_time + self.period) - current_time
-            
             if time_to_wait > 0:
-                print(f"Rate limit reached. Waiting for {time_to_wait:.2f} seconds...")
+                print(f"INFO: Rate limit reached. Pausing for {time_to_wait:.2f} seconds...")
                 time.sleep(time_to_wait)
         
-        # Record the timestamp of the upcoming request
         self.request_timestamps.append(time.time())
 
 
-# --- All Helper Functions (get_access_token, clean_single_address, etc.) ---
-# These functions are unchanged.
+# --- Helper Functions ---
 def get_access_token(client_id, client_secret):
+    """Gets an OAuth 2.0 access token from the USPS API."""
     headers = {"Content-Type": "application/json"}
     data = {"client_id": client_id, "client_secret": client_secret, "grant_type": "client_credentials"}
     print("Requesting access token...")
@@ -89,6 +79,7 @@ def get_access_token(client_id, client_secret):
     return None
 
 def clean_single_address(access_token, address_info):
+    """Validates a single address via the USPS API."""
     if not access_token: return None, "Skipped - No Access Token"
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     params = {
@@ -100,12 +91,10 @@ def clean_single_address(access_token, address_info):
         response.raise_for_status()
         json_response = response.json()
         if "errors" in json_response:
-            error_message = json_response["errors"][0].get("message", "Address not found")
             return None, "API Validation Error"
         return json_response, "Success"
     except requests.exceptions.HTTPError as e:
-        status_code = e.response.status_code
-        return None, f"API HTTP Error: {status_code}"
+        return None, f"API HTTP Error: {e.response.status_code}"
     except Exception as e:
         return None, "Unknown Error"
 
@@ -121,6 +110,7 @@ Do not add any other text, explanation, or markdown formatting around the JSON o
 """
 
 def parse_ai_response(text_response):
+    """Parses the JSON output from an AI model."""
     if not text_response: return None
     try:
         if "```json" in text_response:
@@ -131,31 +121,23 @@ def parse_ai_response(text_response):
             "city": data.get("city", ""), "state": data.get("state", ""), "zip_code": data.get("zip_code", "")
         }
     except (json.JSONDecodeError, KeyError, IndexError) as e:
+        print(f"    - AI returned non-JSON or malformed data. Error: {e}")
         return None
 
-def correct_address_with_local_ai(original_row):
-    full_address_str = f"{original_row.get('demo_address', '')} {original_row.get('demo_address2', '')}, {original_row.get('demo_city', '')}, {original_row.get('demo_state', '')} {original_row.get('demo_zip', '')}".strip()
-    prompt = AI_PROMPT_TEMPLATE.format(full_address_str=full_address_str)
-    headers = {"Content-Type": "application/json"}
-    data = {"model": LOCAL_MODEL_NAME, "messages": [{"role": "user", "content": prompt}], "temperature": 0.1, "stream": False}
-    try:
-        response = requests.post(LOCAL_API_ENDPOINT, headers=headers, json=data, timeout=60)
-        response.raise_for_status()
-        content = response.json()['choices'][0]['message']['content']
-        return parse_ai_response(content)
-    except Exception as e:
-        return None
-
-def correct_address_with_google_ai(model, original_row):
+def correct_address_with_gemini(model, original_row):
+    """Uses the Gemini model to correct an address."""
     full_address_str = f"{original_row.get('demo_address', '')} {original_row.get('demo_address2', '')}, {original_row.get('demo_city', '')}, {original_row.get('demo_state', '')} {original_row.get('demo_zip', '')}".strip()
     prompt = AI_PROMPT_TEMPLATE.format(full_address_str=full_address_str)
     try:
+        print(f"    - Attempting AI correction with Gemini Flash...")
         response = model.generate_content(prompt)
         return parse_ai_response(response.text)
     except Exception as e:
+        print(f"    - An error occurred during the Google AI API call: {e}")
         return None
 
 def populate_cleaned_columns(df, index, address_part):
+    """Helper to populate the cleaned address columns in the DataFrame."""
     df.loc[index, 'cleaned_street_address'] = address_part.get('streetAddress')
     df.loc[index, 'cleaned_secondary_address'] = address_part.get('secondaryAddress')
     df.loc[index, 'cleaned_city'] = address_part.get('city')
@@ -167,89 +149,134 @@ def populate_cleaned_columns(df, index, address_part):
 # --- Main part of the script ---
 if __name__ == "__main__":
     
-    input_csv_path = "Data\WayneHealthpatientDEMOGRAPHICS.csv"
-    output_csv_path = "Data\WayneHealthpatientDEMOGRAPHICSAddressCorrected.csv"
+    input_csv_path = "Data/Test-rate-limit.csv"
+    output_csv_path = "Data/Test-rate-limit-Output.csv"
 
     if not os.path.exists(input_csv_path):
         print(f"Error: Input file not found at '{input_csv_path}'")
     else:
-        # Get USPS token once at the start
         token = get_access_token(CONSUMER_KEY, CONSUMER_SECRET)
 
         if token:
-            # Instantiate the rate limiter for 60 requests per hour
             rate_limiter = RateLimiter(requests_per_hour=60)
 
-            # Read the entire CSV into memory
             df = pd.read_csv(input_csv_path, dtype={"demo_zip": str})
             original_df = df.copy()
             df = df.dropna(subset=["demo_address"]).reset_index(drop=True)
             print(f"\nRead {len(df)} total rows from '{input_csv_path}'. Starting continuous processing...")
 
-            # Prepare new columns for the entire dataframe
             new_cols = ['cleaned_street_address', 'cleaned_secondary_address', 'cleaned_city', 'cleaned_state', 'cleaned_zip', 'cleaned_zip_plus_4', 'api_status']
             for col in new_cols:
                 df[col] = None
             
-            # --- The entire script now runs continuously, with the rate limiter controlling the speed ---
-            
             # Step 0: Initial API Pass
-            print("Step 0: Initial API Pass...")
+            print("\nStep 0: Initial API Pass...")
             for index, row in df.iterrows():
+                print(f"  - Processing row {index + 1}/{len(df)}...")
                 address_to_clean = {"street_1": row.get("demo_address"), "street_2": row.get("demo_address2"), "city": row.get("demo_city"), "state": row.get("demo_state"), "zip_code": str(row.get("demo_zip", ""))[:5]}
                 
-                rate_limiter.wait() # Wait if necessary before the API call
+                rate_limiter.wait()
                 cleaned_data, status = clean_single_address(token, address_to_clean)
                 df.loc[index, 'api_status'] = status
                 
                 if status == 'Success' and cleaned_data and 'address' in cleaned_data:
                     populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
 
-            # --- Correction Pipeline ---
+            # --- Programmatic Correction Pipeline ---
             failed_statuses = ['API HTTP Error: 400', 'API Validation Error', 'Failed']
+            
+            # --- Correction Step 1: PO Box (Full Logic) ---
+            print("\nCorrection Step 1: Checking for 'PO' errors to retry...")
+            retry_count_po = 0
+            # Get a list of indices to avoid issues with changing the DataFrame during iteration
+            rows_to_retry_indices = df[df['api_status'].isin(failed_statuses)].index.tolist()
+            for index in rows_to_retry_indices:
+                row = df.loc[index]
+                original_address = str(row.get('demo_address', ''))
+                parts = original_address.split()
+                if len(parts) > 1 and parts[0].upper() == 'PO' and parts[1].isdigit():
+                    new_address = 'PO Box ' + ' '.join(parts[1:])
+                    print(f"   - Step 1: Retrying row {index + 1} with new address: '{new_address}'")
+                    address_to_clean = {"street_1": new_address, "street_2": row.get("demo_address2"), "city": row.get("demo_city"), "state": row.get("demo_state"), "zip_code": str(row.get("demo_zip", ""))[:5]}
+                    
+                    rate_limiter.wait()
+                    cleaned_data, status = clean_single_address(token, address_to_clean)
+                    if status == 'Success':
+                        retry_count_po += 1
+                        df.loc[index, 'api_status'] = 'Success (Corrected PO Box)'
+                        if cleaned_data and 'address' in cleaned_data:
+                            populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
+            print(f"   - Corrected {retry_count_po} 'PO Box' addresses.")
 
-            # Step 1: PO Box Correction
-            for index in df[df['api_status'].isin(failed_statuses)].index:
-                # ... [Unchanged logic for PO Box] ...
-                pass
+            # --- Correction Step 2: Misplaced ZIP (Full Logic) ---
+            print("\nCorrection Step 2: Checking for misplaced ZIP Codes to retry...")
+            retry_count_zip = 0
+            rows_to_check_zip = df[df['api_status'].isin(failed_statuses)].index.tolist()
+            for index in rows_to_check_zip:
+                row = df.loc[index]
+                zip_is_missing = pd.isna(row.get('demo_zip')) or str(row.get('demo_zip', '')).strip() == ''
+                if zip_is_missing:
+                    addr2_val, city_val, state_val = str(row.get('demo_address2', '')).strip(), str(row.get('demo_city', '')).strip(), str(row.get('demo_state', '')).strip()
+                    misplaced_zip, source_col_name = (addr2_val, 'demo_address2') if addr2_val.isdigit() and len(addr2_val) == 5 else (city_val, 'demo_city') if city_val.isdigit() and len(city_val) == 5 else (state_val, 'demo_state') if state_val.isdigit() and len(state_val) == 5 else (None, None)
+                    if misplaced_zip:
+                        print(f"   - Step 2: Found misplaced ZIP in '{source_col_name}' for row {index + 1}. Retrying.")
+                        address_to_clean = {"street_1": row.get("demo_address"), "street_2": "" if source_col_name == 'demo_address2' else row.get("demo_address2"), "city": "" if source_col_name == 'demo_city' else row.get("demo_city"), "state": "" if source_col_name == 'demo_state' else row.get("demo_state"), "zip_code": misplaced_zip}
+                        
+                        rate_limiter.wait()
+                        cleaned_data, status = clean_single_address(token, address_to_clean)
+                        if status == 'Success':
+                            retry_count_zip += 1
+                            df.loc[index, 'demo_zip'], df.loc[index, source_col_name] = misplaced_zip, ''
+                            df.loc[index, 'api_status'] = 'Success (Corrected ZIP Location)'
+                            if cleaned_data and 'address' in cleaned_data:
+                                populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
+            print(f"   - Corrected {retry_count_zip} misplaced ZIP addresses.")
 
-            # Step 2: Misplaced ZIP
-            for index in df[df['api_status'].isin(failed_statuses)].index:
-                # ... [Unchanged logic for Misplaced ZIP] ...
-                pass
+            # --- Correction Step 3: Lastname Matching (Full Logic) ---
+            print("\nCorrection Step 3: Matching remaining failed rows by lastname (fallback)...")
+            # This step does not use the API, so it does not need the rate limiter.
+            failed_df = df[df['api_status'].isin(failed_statuses)].copy()
+            success_df = df[df['api_status'].str.startswith('Success', na=False)].copy()
+            match_count = 0
+            for failed_index, failed_row in failed_df.iterrows():
+                potential_matches = success_df[(success_df['demo_lastname'] == failed_row['demo_lastname']) & (success_df['demo_zip'] == failed_row['demo_zip']) & (success_df['demo_state'] == failed_row['demo_state']) & (success_df['demo_city'] == failed_row['demo_city'])]
+                for _, match_row in potential_matches.iterrows():
+                    addr1, addr2 = str(failed_row.get('demo_address', '')), str(match_row.get('demo_address', ''))
+                    if fuzz.ratio(addr1, addr2) > 50:
+                        for col in new_cols:
+                            if col.startswith('cleaned_'):
+                                df.loc[failed_index, col] = match_row[col]
+                        df.loc[failed_index, 'api_status'] = 'Matched on Lastname'
+                        match_count += 1
+                        print(f"   - Step 3: Found a match for row {failed_index + 1}")
+                        break
+            print(f"   - Corrected {match_count} rows through lastname matching.")
 
-            # Step 3: Lastname Matching
-            # ... [Unchanged logic for Lastname Matching] ...
-            pass
-
-            # Step 4: AI Correction
+            # --- Correction Step 4: AI Correction Fallback ---
+            print("\nStep 4: Using AI for remaining failed addresses...")
             gemini_flash_model = genai.GenerativeModel('gemini-2.0-flash')
-            for index in df[df['api_status'].isin(failed_statuses)].index:
+            ai_correction_count = 0
+            final_failed_indices = df[df['api_status'].isin(failed_statuses)].index
+            for index in final_failed_indices:
+                print(f"  - AI Fallback for row {index + 1}...")
                 original_row_data = original_df.loc[index]
                 
-                # Attempt 1: Local Model
-                corrected_dict = correct_address_with_local_ai(original_row_data)
+                corrected_dict = correct_address_with_gemini(gemini_flash_model, original_row_data)
+                
                 if corrected_dict:
                     rate_limiter.wait()
                     cleaned_data, status = clean_single_address(token, corrected_dict)
                     if status == 'Success':
-                        df.loc[index, 'api_status'] = f'Success (AI - Local)'
+                        print("    - SUCCESS: Gemini suggestion was validated by USPS.")
+                        ai_correction_count += 1
+                        df.loc[index, 'api_status'] = 'Success (AI - Gemini)'
                         if cleaned_data and 'address' in cleaned_data:
                             populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
                         continue
                 
-                # Attempt 2: Cloud Model
-                corrected_dict = correct_address_with_google_ai(gemini_flash_model, original_row_data)
-                if corrected_dict:
-                    rate_limiter.wait()
-                    cleaned_data, status = clean_single_address(token, corrected_dict)
-                    if status == 'Success':
-                        df.loc[index, 'api_status'] = 'Success (AI - Flash)'
-                        if cleaned_data and 'address' in cleaned_data:
-                           populate_cleaned_columns(df, index, cleaned_data.get("address", {}))
-                        continue
-
                 df.loc[index, 'api_status'] = 'Failed (AI Uncorrectable)'
+            
+            print(f"\n   - Corrected {ai_correction_count} rows using AI model.")
 
             # --- Final Summary & Save ---
             print("\n--- All processing complete! ---")
