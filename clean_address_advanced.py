@@ -85,7 +85,7 @@ def clean_single_address(access_token, address_info):
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429 and attempt < max_retries - 1:
                 print(f"INFO: Rate limit (429) hit. Cooling down for 1 minute...")
-                time.sleep(60)
+                time.sleep(3600)
                 print("INFO: Cooldown finished. Retrying same request...")
                 continue
             else:
@@ -165,8 +165,8 @@ def populate_cleaned_columns(df, index, address_part):
 # --- Main part of the script ---
 if __name__ == "__main__":
     
-    input_csv_path = "Data/SplitFiles/patientDEMOGRAPHICS-part-1.csv"
-    output_csv_path = "Data/SplitFiles/patientDEMOGRAPHICS-part-1-Output.csv"
+    input_csv_path = "Data/patientDEMOGRAPHICS-Remaining.csv"
+    output_csv_path = "Data/patientDEMOGRAPHICS-Remaining-Address-Corrected.csv"
 
     if not os.path.exists(input_csv_path):
         print(f"Error: Input file not found at '{input_csv_path}'")
