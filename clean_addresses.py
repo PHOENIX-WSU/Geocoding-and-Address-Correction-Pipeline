@@ -107,13 +107,13 @@ if __name__ == "__main__":
         # Your list of messy Michigan addresses
         messy_addresses = [
             {
-                "street_1": "771 E COLUMBIA AVE",  # Misspelled Street
-                "city": "Pontiac",
+                "street_1": "14925 Livernois",  # Misspelled Street
+                "city": "Detroit",
                 "state": "MI",
-                "zip": "48340"
+                "zip": "48238"
             },
             {
-                "street_1": "6135 Woodwar",  # Misspelled and incomplete Street
+                "street_1": "5951 Second Ave",  # Misspelled and incomplete Street
                 "city": "Detroit",
                 "state": "MI",
                 "zip": "48202"                
