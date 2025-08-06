@@ -55,7 +55,7 @@ Before running the script, make sure your project directory is set up as follows
 
 ```plaintext
 your-project-folder/
-├── geocoding_script.py         # Your main Python script
+├── main.py         # Your main Python script
 ├── .env                        # You will create this file for your API key
 ├── requirements.txt            # You will create this file for dependencies
 │
@@ -143,20 +143,20 @@ The script is run from your terminal. You must specify which data source from th
 
 ### Syntax
 ```bash
-python geocoding_script.py <source_name>
+python main.py <source_name>
 ```
 
-Replace `geocoding_script.py` with the name of your script file and `<source_name>` with the key you defined in the CONFIG dictionary.
+Replace `main.py` with the name of your script file and `<source_name>` with the key you defined in the CONFIG dictionary.
 
 ### Examples
 To process the demographics dataset:
 ```bash
-python geocoding_script.py demographics
+python main.py demographics
 ```
 
 To process the van dataset:
 ```bash
-python geocoding_script.py van
+python main.py van
 ```
 
 The script will print its progress to the console, showing you each stage as it completes, and will notify you of the final accuracy and where the output file is saved.
