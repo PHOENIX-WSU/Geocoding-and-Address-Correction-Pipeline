@@ -1,4 +1,4 @@
-Geocoding Pipeline
+# Geocoding Pipeline
 
 This script provides a robust, multi-stage pipeline to geocode address data from CSV files. It uses the U.S. Census Bureau's free batch geocoder and features a powerful, two-tiered AI fallback system using Google's Gemini models to correct and re-process addresses that initially fail.
 
