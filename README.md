@@ -1,105 +1,165 @@
-# Address Correction Tool
+# AI-Enhanced Geocoding Pipeline
 
-A Python utility that validates and corrects US addresses using the USPS API (v3). This tool helps ensure addresses are properly formatted and valid according to USPS standards.
+This script provides a robust, multi-stage pipeline to geocode address data from CSV files. It uses the U.S. Census Bureau's free batch geocoder and features a powerful, two-tiered AI fallback system using Google's Gemini models to correct and re-process addresses that initially fail.
 
-TODO:
-- Test more examples
-- Automate the script for multiple address (i.e. read from the files)
-- Add more advanced Fuzzy matching
-  - Zip, City, State, Last name and Address (50%) match
-  - Auto clean zip codes in wrong places
+The final output is a clean CSV file enriched with precise geographic data, including coordinates and FIPS codes, ready for analysis or for import into a database like Google BigQuery.
 
-## Prerequisites
+## ✨ Features
 
-- Python 3.8 or higher
-- USPS API credentials (Consumer Key and Consumer Secret)
+- **Batch Geocoding**: Processes thousands of addresses efficiently using the U.S. Census Bureau API.
+- **Smart AI Fallback**: Automatically uses Google AI (Gemini Flash & Pro) to fix addresses that the Census Geocoder can't match.
+- **FIPS Code Correction**: Uses a secondary API (FCC) to find FIPS codes for addresses that were successfully geocoded by AI but are missing census tract data.
+- **Configurable**: Easily add new data sources by editing a single Python dictionary—no need to change the core logic.
+- **Detailed Output**: Generates clean, final files with original data, coordinates, FIPS codes, and metadata.
+- **Command-Line Driven**: Simple to run for different datasets with a single command.
 
-## How to get USPS API Key
-1. Go to the USPS website and make an account: https://developer.usps.com/
-2. Go to the USPS Web Tools APIs: https://www.usps.com/business/web-tools-apis/welcome.htm?msockid=33097f2acda666c801436a2fccb567f9
-4. Click Sign Up for USPS APIs
-5. You will get a link in your email to complete email validation
-6. You will get an email with the code that you need to enter to complete the login request
-7. Click on the Apps tab and then click "Add App"
-8. Enter the name for the app and enable Public Access I (no need for callback URL or description)
-9. Click on the app name and scroll down to view the consumer key and consumer secret in the Credentials section
+## ⚙️ How It Works
 
-## Installation
+The pipeline operates in three main stages:
 
-1. Clone this repository:
-   ```powershell
-   git clone https://github.com/PHOENIX-WSU/Address-Validation-Tool
-   cd Address-Validation-Tool
-   ```
+### Stage 1: Preparation
 
-2. Set up a Python virtual environment using `venv`:
-   ```powershell
-   python -m venv venv
-   .\venv\Scripts\Activate
-   ```
+1. Reads your source CSV file.
+2. Standardizes the address columns (street, city, state, zip) based on your configuration.
+3. Removes any rows that are missing a street address.
+4. Assigns a Unique ID to each row to reliably merge the data back together later.
+5. Saves a temporary, clean CSV file formatted specifically for the Census Geocoder API.
 
-   Alternatively, you can use `uv` (a faster alternative to venv):
-   ```powershell
-   pip install uv
-   uv venv --python 3.11
-   .\venv\Scripts\Activate
-   ```
+### Stage 2: Geocoding & AI Correction
 
-3. Install dependencies:
-   ```powershell
-   # If using pip
-   pip install requests python-dotenv pandas thefuzz python-Levenshtein google-generativeai
+1. The prepared CSV is sent to the U.S. Census Geocoder for batch processing.
+2. The script analyzes the results. Any addresses that could not be matched (No_Match or Tie) are sent to the AI fallback system.
+3. **Tier 1 (Gemini Flash)**: The fast and efficient Gemini Flash model attempts to correct the faulty address. If successful, the corrected address is geocoded individually.
+4. **Tier 2 (Gemini Pro)**: If Gemini Flash fails, the more powerful Gemini Pro model is used for a second attempt at correction and geocoding.
+5. All raw results from this stage are saved for debugging and review.
 
-   # If using uv
-   uv pip install requests python-dotenv pandas thefuzz python-Levenshtein google-generativeai
-   ```
+### Stage 3: Finalization & Cleanup
 
-## Configuration
+1. The script takes the geocoded data and cleans the FIPS codes to ensure they are in a standard format.
+2. For any AI-corrected addresses that have coordinates but are still missing FIPS codes, it makes a final call to the FCC Area API to fill in the gaps.
+3. The geocoded data is merged back with your original input data using the Unique ID.
+4. Metadata columns like dataset (from your config) and dategeocoded (the current date) are added.
+5. The final, production-ready CSV is saved to the specified output directory.
 
-1. Create a `.env` file in the project root:
-   ```
-   CONSUMER_KEY=your_usps_consumer_key
-   CONSUMER_SECRET=your_usps_consumer_secret
-   ```
+## 🚀 Getting Started
 
-2. Replace `your_usps_consumer_key` and `your_usps_consumer_secret` with your actual USPS API credentials.
+Follow these steps to set up and run the geocoding pipeline.
 
-## Usage
+### Prerequisites
 
-Run the script with a single address:
-```powershell
-python clean_addresses.py
+- Python 3.7+
+- A Google AI API Key. You can get one from Google AI Studio.
+### 1. File & Folder Structure
+
+Before running the script, make sure your project directory is set up as follows. The script expects this structure to read input files and save results.
+
+```plaintext
+your-project-folder/
+├── geocoding_script.py         # Your main Python script
+├── .env                        # You will create this file for your API key
+├── requirements.txt            # You will create this file for dependencies
+│
+├── Data/                       # Folder for your INPUT data
+│   └── patientDEMOGRAPHOGRAPHICS-11th-July-2025.csv
+│
+└── geocoded_results/           # Folder for your OUTPUT data
+    └── Production/             # Subfolder for the final, clean files
 ```
 
-The script will:
-1. Load your USPS API credentials from the `.env` file
-2. Get an OAuth access token
-3. Validate and clean the provided address
-4. Return the standardized address format
+### 2. Install Dependencies
 
-## Features
+The script relies on several Python packages.
 
-- OAuth 2.0 authentication with USPS API
-- Address validation and standardization
-- Proper error handling for invalid addresses
-- Environment variable support for secure credential management
+First, create a file named `requirements.txt` in your project folder and add the following lines:
 
-## Error Handling
+```plaintext
+pandas
+requests
+python-dotenv
+google-generativeai
+```
 
-The script handles various error cases:
-- Missing API credentials
-- Invalid addresses
-- API connection issues
-- Rate limiting
+Now, open your terminal or command prompt, navigate to your project folder, and run this command to install them:
 
-## Scores
-**Tools**|**Score Test-Set (Updated Prompt)**
------|-----
-Plain (no genAI)|92.68%
-gemma3:12b + gemini-1.5-flash-latest|95.20%
-gemma3:12b + gemini-2.0-flash|95.45%
-gemma3:12b + gemini-2.5-flash|95.45%
-gemma3:12b + gemma-3-27b-it|95.20%
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure Your API Key
+
+Your Google AI API Key should be kept secret. The script uses a `.env` file to load it securely.
+
+Create a file named `.env` in the root of your project folder.
+
+Add your API key to the file like this:
+
+```
+GOOGLE_AI_API_KEY="YOUR_API_KEY_HERE"
+```
+
+Replace `YOUR_API_KEY_HERE` with your actual key.
+
+## 🔧 Configuring Data Sources
+
+You can easily process new datasets by adding a configuration entry to the CONFIG dictionary at the top of the script.
+
+Here is a template for adding a new source. Just copy and paste this into the CONFIG dictionary and modify the values.
+
+```python
+'new_source_name': {
+    # Path to the raw CSV file you want to process.
+    'input_file': 'Data/my_new_data.csv',
+
+    # Path to save the intermediate file prepared for the geocoder.
+    'geocoding_input': 'Data/prepared_new_source_for_geocoding.csv',
+
+    # Path to save the raw results from the geocoder (including failures).
+    'geocoded_output': 'geocoded_results/new_source_geocoded_raw.csv',
+
+    # Path to save the final, clean, production-ready file.
+    'final_output': 'geocoded_results/Production/new_source_final_for_bigquery.csv',
+
+    # Maps your CSV's column names to the standard names the script needs.
+    # Change the values (e.g., 'AddressLine1') to match the column headers in your CSV.
+    'column_map': {
+        'street': 'AddressLine1',
+        'city': 'CityName',
+        'state': 'StateAbbr',
+        'zip': 'PostalCode'
+    },
+
+    # A descriptive name that will be added to the 'dataset' column in the final output file.
+    'dataset_name': 'My New Dataset (Geocoded)',
+
+    # Set to `True` if your data is missing a state column and should default to 'MI'.
+    # Set to `False` if your data already has a state column.
+    'add_state_mi': False
+}
+```
+
+## ▶️ How to Run the Script
+
+The script is run from your terminal. You must specify which data source from the CONFIG dictionary you want to process.
+
+### Syntax
+```bash
+python geocoding_script.py <source_name>
+```
+
+Replace `geocoding_script.py` with the name of your script file and `<source_name>` with the key you defined in the CONFIG dictionary.
+
+### Examples
+To process the demographics dataset:
+```bash
+python geocoding_script.py demographics
+```
+
+To process the van dataset:
+```bash
+python geocoding_script.py van
+```
+
+The script will print its progress to the console, showing you each stage as it completes, and will notify you of the final accuracy and where the output file is saved.
 
 ## Contributing
 
