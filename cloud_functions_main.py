@@ -32,9 +32,9 @@ CONFIG = {
         },
         'dataset_name': 'Patient Demographics (Geocoded)',
         'add_state_mi': False,
-        'bq_project': 'your-gcp-project-id',  # <-- TODO: Update
-        'bq_dataset': 'your_bigquery_dataset', # <-- TODO: Update
-        'bq_table': 'your_geocoded_table'      # <-- TODO: Update
+        'bq_project': 'phoenix-investigators-dev',  
+        'bq_dataset': 'WayneHealthRaw',
+        'bq_table': 'patientDemographicsGeocoded'    
     },
     'van': {
         'column_map': {
@@ -42,9 +42,9 @@ CONFIG = {
         },
         'dataset_name': 'MHU Field Data: Van deployment addresses (Geocoded)',
         'add_state_mi': True,
-        'bq_project': 'your-gcp-project-id',  # <-- TODO: Update
-        'bq_dataset': 'your_bigquery_dataset', # <-- TODO: Update
-        'bq_table': 'your_geocoded_table'      # <-- TODO: Update
+        'bq_project': 'phoenix-investigators-dev', 
+        'bq_dataset': 'WayneHealthRaw', 
+        'bq_table': 'VANAddressesGeocoded'      
     }
 }
 
