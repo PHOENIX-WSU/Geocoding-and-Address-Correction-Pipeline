@@ -10,23 +10,21 @@ import google.generativeai as genai
 from datetime import datetime
 
 # --- Configuration for Different Data Sources ---
-# Define all unique settings for your datasets here.
-# To add a new source, just create a new entry in this dictionary.
 CONFIG = {
     'demographics': {
-        'input_file': 'Data/patientDEMOGRAPHOGRAPHICS-11th-July-2025.csv',
-        'geocoding_input': 'Data/prepared_demographics_for_geocoding.csv',
-        'geocoded_output': 'geocoded_results/demographics_geocoded_raw.csv',
-        'final_output': 'geocoded_results/Production/demographics_final_for_bigquery.csv',
+        'input_file': 'Production/Input/EPI Landing_Patient Demographics_07-28-25.csv',
+        'geocoding_input': 'Production/Geocoding-Input/EPI Landing_Patient Demographics_07-28-25.csv',
+        'geocoded_output': 'Production/Geocoded/EPI Landing_Patient Demographics_07-28-25.csv',
+        'final_output': 'Production/Geocoded/EPI Landing_Patient Demographics_07-28-25_Geocoded.csv',
         'original_data_df': None, # To be loaded later
         'column_map': {
-            'street': 'demo_address',
-            'city': 'demo_city',
-            'state': 'demo_state',
-            'zip': 'demo_zip'
+            'street': 'ADDRESS',
+            'city': 'CITY',
+            'state': 'STATE',
+            'zip': 'ZIP'
         },
         'dataset_name': 'Patient Demographics (Geocoded)',
-        'add_state_mi': False # This dataset already has a state column
+        'add_state_mi': False
     },
     'van': {
         'input_file': 'Production-Code-Tests/Data/van.csv',
@@ -41,7 +39,7 @@ CONFIG = {
             'zip': 'zip'
         },
         'dataset_name': 'MHU Field Data: Van deployment addresses (Geocoded)',
-        'add_state_mi': True # This dataset needs 'MI' added
+        'add_state_mi': True
     }
 }
 
@@ -63,8 +61,8 @@ def load_environment_and_models():
     try:
         genai.configure(api_key=api_key)
         models = {
-            'flash': genai.GenerativeModel('gemini-1.5-flash-latest'),
-            'pro': genai.GenerativeModel('gemini-1.5-pro-latest')
+            'flash': genai.GenerativeModel('gemini-2.5-flash'),
+            'pro': genai.GenerativeModel('gemini-2.5-pro')
         }
         print("✅ Google AI configured successfully.")
         return models
@@ -79,23 +77,18 @@ def prepare_for_geocoding(config):
     """
     print(f"\n--- Stage 1: Preparing data from '{config['input_file']}' ---")
     try:
-        # Read the source data, keeping all data as strings
         df = pd.read_csv(config['input_file'], dtype=str).fillna('')
-        config['original_data_df'] = df.copy() # Save original for final merge
+        config['original_data_df'] = df.copy()
     except FileNotFoundError:
         print(f"❌ Error: Input file not found at '{config['input_file']}'.")
         sys.exit(1)
 
-    # Add 'MI' as the state if the config requires it
     if config.get('add_state_mi', False):
         df['state'] = 'MI'
         print("Hardcoded 'MI' as the state.")
 
-    # Standardize column names based on the map in the config
     col_map = config['column_map']
-    
-    # Check if all required columns exist
-    for key, val in col_map.items():
+    for val in col_map.values():
         if val not in df.columns:
             print(f"❌ Error: Required column '{val}' not found in the input file.")
             sys.exit(1)
@@ -106,20 +99,15 @@ def prepare_for_geocoding(config):
     df_geocoder['State'] = df[col_map['state']]
     df_geocoder['ZIP'] = df[col_map['zip']]
 
-    # CRITICAL: Remove rows with no street address
     original_rows = len(df_geocoder)
     df_geocoder = df_geocoder[df_geocoder['Street Address'].str.strip() != ''].copy()
     print(f"Removed {original_rows - len(df_geocoder)} rows with an empty street address.")
 
-    # Create a Unique ID for re-joining data later
     df_geocoder.insert(0, 'Unique ID', range(len(df_geocoder)))
     
-    # Link the Unique ID back to the original dataframe for the final merge
     config['original_data_df'] = config['original_data_df'].iloc[df_geocoder.index].copy()
     config['original_data_df']['Unique ID'] = df_geocoder['Unique ID']
 
-
-    # Save the prepared file
     output_path = config['geocoding_input']
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df_geocoder.to_csv(output_path, index=False)
@@ -127,122 +115,149 @@ def prepare_for_geocoding(config):
     return df_geocoder
 
 # --- Stage 2: Geocoding with AI Fallback ---
-# --- Stage 2: Geocoding with AI Fallback ---
 def geocode_dataframe(df, config, ai_models):
     """
-    Geocodes a prepared DataFrame using batch processing and a two-tiered AI fallback for failures.
+    Geocodes a DataFrame using batch processing and a batch AI fallback.
     """
-    print(f"\n--- Stage 2: Starting Geocoding Process ---")
-    # Step 2.1: Batch Geocoding with Census API
-    try:
-        print("Sending data for batch geocoding...")
-        url = "https://geocoding.geo.census.gov/geocoder/geographies/addressbatch"
-        with io.StringIO() as buffer:
-            # The FIX: The Census API requires a CSV with NO HEADER.
-            df.to_csv(buffer, index=False, header=False)
-            buffer.seek(0)
-            files = {'addressFile': ('addresses.csv', buffer, 'text/csv')}
-            
-            # The FIX: Re-added the 'vintage' parameter to be more explicit.
-            payload = {'benchmark': 'Public_AR_Current', 'vintage': 'Current_Current'}
-            
-            response = requests.post(url, files=files, data=payload, timeout=300)
-            response.raise_for_status()
-        
-        col_names = ['Unique ID', 'Input Address', 'Match Status', 'Match Type', 'Matched Address', 
-                     'Coordinates', 'TIGER Line ID', 'Side', 'State FIPS', 'County FIPS', 'Tract', 'Block']
-        geocoded_df = pd.read_csv(io.StringIO(response.text), header=None, names=col_names, dtype=str).fillna('')
-        print("✅ Batch geocoding complete.")
+    print("\n--- Stage 2: Starting Geocoding Process ---")
 
-    except requests.RequestException as e:
-        print(f"❌ Error during batch geocoding: {e}")
-        # Add more detail for 400 errors
-        if e.response is not None and e.response.status_code == 400:
-            print("This 400 error often means the input file format was incorrect (e.g., contained a header) or had invalid data.")
-            print(f"Server response: {e.response.text}")
+    # Step 2.1: Initial Batch Geocoding
+    print("Performing initial batch geocoding...")
+    geocoded_df = _perform_batch_geocoding(df)
+
+    if geocoded_df is None:
+        print("❌ Initial batch geocoding failed. Stopping pipeline.")
         return None
+    print("✅ Initial batch geocoding complete.")
 
     # Step 2.2: AI Correction for Failures
-    failed_rows = geocoded_df[geocoded_df['Match Status'].isin(['No_Match', 'Tie'])]
-    print(f"Found {len(failed_rows)} addresses requiring AI correction.")
-    
+    failed_rows = geocoded_df[geocoded_df['Match Status'].isin(['No_Match', 'Tie'])].copy()
+    print(f"\nFound {len(failed_rows)} addresses requiring AI correction.")
+
     if not failed_rows.empty:
-        ai_corrected_count = 0
-        for index, row in failed_rows.iterrows():
-            print(f"  - AI Fallback for ID {row['Unique ID']}: '{row['Input Address']}'")
-            # Tier 1: Gemini Flash
-            ai_address = _correct_address_with_ai(ai_models['flash'], row['Input Address'])
-            new_match = _geocode_single_address(ai_address) if ai_address else None
+        # Part 1: Get AI corrections for all failed rows sequentially.
+        print("Starting AI correction process... (This may take a while for large files)")
+        corrected_data = []
+        total_failed = len(failed_rows)
+        for i, (idx, row) in enumerate(failed_rows.iterrows()):
+            if (i + 1) % 100 == 0:
+                print(f"  ...AI processing row {i + 1} of {total_failed}")
+
+            input_address = row['Input Address']
+            ai_address = _correct_address_with_ai(ai_models['flash'], input_address)
+            model_used = 'Flash'
+
+            if not ai_address or not ai_address.get('street'):
+                ai_address = _correct_address_with_ai(ai_models['pro'], input_address)
+                model_used = 'Pro'
             
-            if new_match:
-                print("    ✅ Success with Gemini Flash.")
-                _update_row_with_match(geocoded_df, index, new_match, "Match (AI Corrected - Flash)")
-                ai_corrected_count += 1
-                continue
-
-            # Tier 2: Gemini Pro
-            print("    - Flash failed. Retrying with Gemini Pro...")
-            ai_address = _correct_address_with_ai(ai_models['pro'], row['Input Address'])
-            new_match = _geocode_single_address(ai_address) if ai_address else None
-
-            if new_match:
-                print("    ✅ Success with Gemini Pro.")
-                _update_row_with_match(geocoded_df, index, new_match, "Match (AI Corrected - Pro)")
-                ai_corrected_count += 1
+            if ai_address and ai_address.get('street'):
+                corrected_data.append({
+                    'Unique ID': row['Unique ID'],
+                    'Street Address': ai_address.get('street', ''),
+                    'City': ai_address.get('city', ''),
+                    'State': ai_address.get('state', ''),
+                    'ZIP': ai_address.get('zip', ''),
+                    'AI Model': model_used
+                })
         
-        print(f"AI correction complete. Successfully corrected {ai_corrected_count} addresses.")
+        print(f"✅ AI correction finished. {len(corrected_data)} addresses were parsed for re-geocoding.")
+
+        # Part 2: Batch geocode the newly corrected addresses.
+        if corrected_data:
+            corrected_df = pd.DataFrame(corrected_data)
+            regeocoding_input_df = corrected_df[['Unique ID', 'Street Address', 'City', 'State', 'ZIP']]
+            
+            print("\nSending AI-corrected addresses for a new round of batch geocoding...")
+            regeocoded_results_df = _perform_batch_geocoding(regeocoding_input_df)
+
+            if regeocoded_results_df is not None and not regeocoded_results_df.empty:
+                # Part 3: Merge the successful new results back into the main DataFrame.
+                print("Merging re-geocoded results...")
+                regeocoded_results_df = regeocoded_results_df.merge(
+                    corrected_df[['Unique ID', 'AI Model']], on='Unique ID', how='left'
+                )
+                
+                successful_regeocodes = regeocoded_results_df[regeocoded_results_df['Match Status'] == 'Match'].copy()
+                
+                if not successful_regeocodes.empty:
+                    print(f"Successfully re-geocoded {len(successful_regeocodes)} addresses after AI correction.")
+                    
+                    geocoded_df.set_index('Unique ID', inplace=True)
+                    successful_regeocodes.set_index('Unique ID', inplace=True)
+                    
+                    successful_regeocodes['Match Status'] = 'Match (AI Corrected - ' + successful_regeocodes['AI Model'] + ')'
+                    
+                    columns_to_update = ['Match Status', 'Match Type', 'Matched Address', 'Coordinates', 'TIGER Line ID', 'Side', 'State FIPS', 'County FIPS', 'Tract', 'Block']
+                    
+                    geocoded_df.update(successful_regeocodes[columns_to_update])
+                    geocoded_df.reset_index(inplace=True)
+                else:
+                    print("No AI-corrected addresses could be matched in the second batch.")
     
-    # Save the raw geocoded results
     geocoded_df.to_csv(config['geocoded_output'], index=False)
-    print(f"✅ Geocoding process finished. Raw results saved to {config['geocoded_output']}")
+    print(f"\n✅ Geocoding process finished. Raw results saved to {config['geocoded_output']}")
     return geocoded_df
 
-# Helper functions for geocoding
+# --- Helper Functions ---
+def _perform_batch_geocoding(df):
+    """
+    Takes a dataframe and performs geocoding in chunks. 
+    Returns a combined dataframe of results or None if it fails.
+    """
+    chunk_size = 6000
+    all_results = []
+    num_chunks = (len(df) // chunk_size) + (1 if len(df) % chunk_size > 0 else 0)
+    
+    if num_chunks == 0:
+        return pd.DataFrame()
+
+    print(f"Data will be sent in {num_chunks} chunk(s) of up to {chunk_size} rows.")
+
+    for i, start_index in enumerate(range(0, len(df), chunk_size)):
+        end_index = start_index + chunk_size
+        chunk_df = df.iloc[start_index:end_index]
+        print(f"  - Sending chunk {i + 1} of {num_chunks}...")
+        
+        try:
+            url = "https://geocoding.geo.census.gov/geocoder/geographies/addressbatch"
+            with io.StringIO() as buffer:
+                chunk_df.to_csv(buffer, index=False, header=False)
+                buffer.seek(0)
+                files = {'addressFile': ('addresses.csv', buffer, 'text/csv')}
+                payload = {'benchmark': 'Public_AR_Current', 'vintage': 'Current_Current'}
+                
+                response = requests.post(url, files=files, data=payload, timeout=300)
+                response.raise_for_status()
+            
+            col_names = ['Unique ID', 'Input Address', 'Match Status', 'Match Type', 'Matched Address', 'Coordinates', 'TIGER Line ID', 'Side', 'State FIPS', 'County FIPS', 'Tract', 'Block']
+            
+            geocoded_chunk_df = pd.read_csv(io.StringIO(response.text), header=None, names=col_names, dtype=str).fillna('')
+            all_results.append(geocoded_chunk_df)
+            print(f"    ✅ Chunk {i + 1} processed.")
+
+        except requests.RequestException as e:
+            print(f"    ❌ Error on chunk {i + 1}: {e}")
+            if e.response is not None:
+                print(f"    Server response: {e.response.text[:200]}...") # Print first 200 chars of error
+            continue
+    
+    if not all_results:
+        return None
+        
+    return pd.concat(all_results, ignore_index=True)
+
 def _correct_address_with_ai(model, full_address_str):
     """Sends a single address to the AI for correction."""
     prompt = AI_PROMPT_TEMPLATE.format(full_address_str=full_address_str)
     try:
         response = model.generate_content(prompt)
         text_response = response.text
-        # Clean the response to ensure it's valid JSON
         if "```json" in text_response:
             text_response = text_response.split("```json")[1].split("```")[0].strip()
         return json.loads(text_response)
     except Exception:
         return None
-
-def _geocode_single_address(address_info):
-    """Geocodes a single, structured address dictionary."""
-    if not address_info: return None
-    url = "https://geocoding.geo.census.gov/geocoder/locations/address"
-    try:
-        params = {
-            'street': address_info.get('street', ''),
-            'city': address_info.get('city', ''),
-            'state': address_info.get('state', ''),
-            'zip': address_info.get('zip', ''),
-            'benchmark': 'Public_AR_Current', 'format': 'json'
-        }
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        result = response.json()
-        if result['result']['addressMatches']:
-            return result['result']['addressMatches'][0]
-    except Exception:
-        pass
-    return None
-
-def _update_row_with_match(df, index, match, status_text):
-    """Updates a DataFrame row in-place with new geocoded data."""
-    df.loc[index, 'Match Status'] = status_text
-    df.loc[index, 'Match Type'] = match.get('matchType', 'Non_Exact')
-    df.loc[index, 'Matched Address'] = match.get('matchedAddress')
-    coords = match.get('coordinates', {})
-    df.loc[index, 'Coordinates'] = f"{coords.get('x')},{coords.get('y')}"
-    geographies = match.get('geographies', {})
-    tract_info = geographies.get('Census Tracts', [{}])[0]
-    for key in ['STATE', 'COUNTY', 'TRACT', 'BLOCK']:
-        df.loc[index, f'{key.title()} FIPS' if key != 'TRACT' and key != 'BLOCK' else key.title()] = tract_info.get(key)
 
 # --- Stage 3: Final Processing and Cleanup ---
 def process_final_results(geocoded_df, config):
@@ -252,7 +267,6 @@ def process_final_results(geocoded_df, config):
     """
     print("\n--- Stage 3: Finalizing Results ---")
     
-    # 3.1: Clean and format FIPS codes
     print("Cleaning and padding FIPS codes...")
     fips_cols = ['State FIPS', 'County FIPS', 'Tract', 'Block']
     for col in fips_cols:
@@ -263,48 +277,36 @@ def process_final_results(geocoded_df, config):
     geocoded_df['Tract'] = geocoded_df['Tract'].str.zfill(6)
     geocoded_df['Block'] = geocoded_df['Block'].str.zfill(4)
 
-    # 3.2: Fix rows where AI found coordinates but FIPS are still missing
     print("Checking for missing FIPS in AI-corrected rows...")
     geocoded_df = _fix_fips_from_coords(geocoded_df)
 
-    # 3.3 Create full FIPS codes
     geocoded_df['fips_11'] = geocoded_df['State FIPS'] + geocoded_df['County FIPS'] + geocoded_df['Tract']
     geocoded_df['fips_15'] = geocoded_df['fips_11'] + geocoded_df['Block']
 
-    # 3.4 Merge geocoded data back with original data
     print("Merging geocoded data with original source data...")
     original_df = config['original_data_df']
     
-    # Ensure 'Unique ID' is the same type for merging
     geocoded_df['Unique ID'] = pd.to_numeric(geocoded_df['Unique ID'], errors='coerce').astype('Int64')
     original_df['Unique ID'] = pd.to_numeric(original_df['Unique ID'], errors='coerce').astype('Int64')
 
     final_df = pd.merge(original_df, geocoded_df, on='Unique ID', how='inner')
 
-    # 3.5 Filter for successful matches only
     matched_statuses = ['Match', 'Match (AI Corrected - Flash)', 'Match (AI Corrected - Pro)']
     final_df = final_df[final_df['Match Status'].isin(matched_statuses)].copy()
     print(f"Filtered down to {len(final_df)} successfully matched rows.")
     
-    # 3.6 Final column cleanup and metadata addition
     final_df = final_df.drop(columns=['Unique ID', 'Match Type'])
     
-    # --- THE FIX IS HERE ---
-    # First, drop the 'dataset' column if it already exists from the source file.
     if 'dataset' in final_df.columns:
         final_df = final_df.drop(columns=['dataset'])
-    # Now, safely insert the new 'dataset' column at the beginning.
     final_df.insert(0, 'dataset', config['dataset_name'])
-    # --- END OF FIX ---
     
-    # Check if 'dateingested' exists before trying to insert after it
     if 'dateingested' in final_df.columns:
         insert_loc = final_df.columns.get_loc('dateingested') + 1
         final_df.insert(insert_loc, 'dategeocoded', datetime.now().date())
     else:
         final_df['dategeocoded'] = datetime.now().date()
         
-    # Save the final file for upload
     output_path = config['final_output']
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     final_df.to_csv(output_path, index=False)
@@ -319,7 +321,7 @@ def process_final_results(geocoded_df, config):
 def _fix_fips_from_coords(df):
     """Uses FCC API to find FIPS for rows with valid coordinates but missing FIPS."""
     ai_statuses = ['Match (AI Corrected - Flash)', 'Match (AI Corrected - Pro)']
-    fips_is_missing = ~df['State FIPS'].str.match(r'[1-9]', na=False) 
+    fips_is_missing = ~df['State FIPS'].str.match(r'\d', na=False) 
     rows_to_fix = df[df['Match Status'].isin(ai_statuses) & fips_is_missing]
 
     if rows_to_fix.empty:
@@ -348,7 +350,7 @@ def _get_fips_from_fcc(latitude, longitude):
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         fips_code = response.json().get('Block', {}).get('FIPS')
-        if fips_code:
+        if fips_code and len(fips_code) == 15:
             return {
                 'State FIPS': fips_code[0:2], 'County FIPS': fips_code[2:5],
                 'Tract': fips_code[5:11], 'Block': fips_code[11:15]
@@ -359,30 +361,24 @@ def _get_fips_from_fcc(latitude, longitude):
 
 # --- Main Execution ---
 def main():
-    """Main function to orchestrate the geocoding pipeline."""
     parser = argparse.ArgumentParser(description="Full-cycle Geocoding Pipeline with AI Correction.")
     parser.add_argument('source', choices=CONFIG.keys(), help='The name of the data source to process.')
     args = parser.parse_args()
     
-    source_key = args.source
-    print(f"Starting geocoding pipeline for source: '{source_key}'")
-    
-    config = CONFIG[source_key]
+    config = CONFIG[args.source]
+    print(f"Starting geocoding pipeline for source: '{args.source}'")
 
-    # Step 0: Load environment and AI models
     ai_models = load_environment_and_models()
-
-    # Step 1: Prepare the data for geocoding
     prepared_df = prepare_for_geocoding(config)
-    if prepared_df is None:
+    if prepared_df is None or prepared_df.empty:
+        print("Preparation stage resulted in an empty dataframe. Halting.")
         return
 
-    # Step 2: Geocode the prepared data with AI fallback
     geocoded_df = geocode_dataframe(prepared_df, config, ai_models)
-    if geocoded_df is None:
+    if geocoded_df is None or geocoded_df.empty:
+        print("Geocoding stage resulted in an empty dataframe. Halting.")
         return
 
-    # Step 3: Process the results for final output
     process_final_results(geocoded_df, config)
 
 if __name__ == '__main__':
