@@ -61,19 +61,30 @@ def geocode_gcs_file(event, context):
     
     print(f"Processing file: {file_name} from bucket: {bucket_name}.")
 
-    # Determine which configuration to use based on the file path in GCS
-    # Example: if file is in 'demographics/input/some_file.csv', use 'demographics' config
-    source_type = file_name.split('/')[0] 
-    if source_type not in CONFIG:
-        print(f"Error: Unknown source type '{source_type}' from file path. Halting.")
+    # --- MODIFIED LOGIC: Determine config by searching filename ---
+    source_type = None
+    normalized_filename = file_name.lower() # Convert to lowercase for case-insensitive matching
+
+    # Check for demographics keywords. Handles "Patient Demographics" and "patientdemographics".
+    if 'patient' in normalized_filename and 'demographics' in normalized_filename:
+        source_type = 'demographics'
+    # Check for the van keyword
+    elif 'van' in normalized_filename:
+        source_type = 'van'
+    # --- END OF MODIFIED LOGIC ---
+
+    if source_type is None:
+        print(f"❌ Error: Could not determine data source type from filename '{file_name}'. Halting.")
+        print("Filename must contain keywords like 'Patient Demographics' or 'van'.")
         return
 
+    print(f"✅ Detected source type: '{source_type}'")
     config = CONFIG[source_type]
     
-    # --- Execute the Pipeline ---
+    # --- Execute the Pipeline (this part remains the same) ---
     ai_models = load_environment_and_models()
     if not ai_models:
-        return # Stop if AI setup fails
+        return 
 
     prepared_df, original_df = prepare_for_geocoding(bucket_name, file_name, config)
     if prepared_df is None or prepared_df.empty:
@@ -87,7 +98,6 @@ def geocode_gcs_file(event, context):
 
     final_df = process_final_results(geocoded_df, original_df, config)
 
-    # NEW: Load final results to BigQuery instead of saving to CSV
     if final_df is not None and not final_df.empty:
         load_to_bigquery(final_df, config)
     else:

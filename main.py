@@ -40,7 +40,22 @@ CONFIG = {
         },
         'dataset_name': 'MHU Field Data: Van deployment addresses (Geocoded)',
         'add_state_mi': True
-    }
+    },
+    'AFI': {
+        'input_file': 'Production/Input/HistoricTestingAFI_to_geocode.csv',
+        'geocoding_input': 'Production/Input/HistoricTestingAFI_to_geocode.csv',
+        'geocoded_output': 'Production/Input/HistoricTestingAFI_to_geocode.csv',
+        'final_output': 'Production/Input/HistoricTestingAFI_to_geocode_Geocoded.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'AddressLine1',
+            'city': 'City',
+            'state': 'state',
+            'zip': 'Zip'
+        },
+        'dataset_name': 'HistoricTestingAFI (Geocoded)',
+        'add_state_mi': True
+    },
 }
 
 # --- AI and API Configuration ---

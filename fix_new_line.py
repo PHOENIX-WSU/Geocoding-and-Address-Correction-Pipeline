@@ -48,10 +48,10 @@ def fix_multiline_csv(input_file, output_file):
 if __name__ == "__main__":
     # 1. Set the name of your file that has the errors.
     #    Make sure it's in the same folder as this script, or provide the full path.
-    source_csv = 'Data/van-complete-data.csv'
+    source_csv = 'Production/Input/HistoricTestingAFI_to_geocode_Geocoded.csv'
 
     # 2. Set the name for your new, fixed CSV file.
-    fixed_csv = 'van-complete-data-line-fixed.csv'
+    fixed_csv = 'Production/Geocoded/HistoricTestingAFI_to_geocode_Geocoded.csv'
 
     # 3. Run the cleaning function.
     fix_multiline_csv(source_csv, fixed_csv)
