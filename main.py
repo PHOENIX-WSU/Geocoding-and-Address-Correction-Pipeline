@@ -56,6 +56,21 @@ CONFIG = {
         'dataset_name': 'HistoricTestingAFI (Geocoded)',
         'add_state_mi': True
     },
+    'TestingFlat': {
+        'input_file': 'Production/Input/HistoricTestingFlat(in)_cleaned.csv',
+        'geocoding_input': 'Production/Geocoding-Input/HistoricTestingFlat(in).csv',
+        'geocoded_output': 'Production/Geocoded/HistoricTestingFlat(in)_geocoded.csv',
+        'final_output': 'Production/Geocoded/HistoricTestingFlat(in)_geocoded_upload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'ParsedStreetAddress',
+            'city': 'ParsedCity',
+            'state': 'ParsedState',
+            'zip': 'ParsedZip'
+        },
+        'dataset_name': 'HistoricTestingAFI (Geocoded)',
+        'add_state_mi': False
+    },
 }
 
 # --- AI and API Configuration ---
