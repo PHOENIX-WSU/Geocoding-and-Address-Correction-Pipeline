@@ -45,9 +45,25 @@ GOOGLE_AI_API_KEY="YOUR_API_KEY_HERE"
 
 Replace `YOUR_API_KEY_HERE` with your actual Google AI API key.
 
-### 3. How to Run the Script
+### 3. Folder Structure
 
-The script is run from the command line. You need to specify which data source you want to process.
+Before running the script, you must create a few folders to store your input data and the intermediate geocoding results. These folders are included in the `.gitignore` file and will not be created automatically when you clone the repository.
+
+Create the following folder structure in your project's root directory:
+
+```
+/Production
+    /Input
+    /Geocoded
+/Data
+```
+
+- The `Production/Input` and `Data` folders are where you will place your raw CSV files (e.g., `patientDemographics10thSep.csv`).
+- The `Production/Geocoded` folder is where the script will save intermediate files.
+
+### 4. How to Run the Script
+
+The script is run from the command line. You need to specify which data source you want to process. Make sure you have placed your input CSV files in the correct directory as described in the **Folder Structure** section.
 
 #### Command Syntax
 ```bash
