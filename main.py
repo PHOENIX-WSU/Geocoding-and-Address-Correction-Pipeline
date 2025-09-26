@@ -12,10 +12,10 @@ from datetime import datetime
 # --- Configuration for Different Data Sources ---
 CONFIG = {
     'demographics': {
-        'input_file': 'Production/Input/EPI Landing_Patient Demographics_07-28-25.csv',
-        'geocoding_input': 'Production/Geocoding-Input/EPI Landing_Patient Demographics_07-28-25.csv',
-        'geocoded_output': 'Production/Geocoded/EPI Landing_Patient Demographics_07-28-25.csv',
-        'final_output': 'Production/Geocoded/EPI Landing_Patient Demographics_07-28-25_Geocoded.csv',
+        'input_file': 'Production/Input/patientDemographics10thSep.csv',
+        'geocoding_input': 'Production/Geocoding-Input/patientDemographics10thSep.csv',
+        'geocoded_output': 'Production/Geocoded/patientDemographics10thSep_geocoded.csv',
+        'final_output': 'Production/Geocoded/patientDemographics10thSep_geocodedupload.csv',
         'original_data_df': None, # To be loaded later
         'column_map': {
             'street': 'ADDRESS',
@@ -69,6 +69,126 @@ CONFIG = {
             'zip': 'ParsedZip'
         },
         'dataset_name': 'HistoricTestingAFI (Geocoded)',
+        'add_state_mi': False
+    },
+    'DentalPlaces': {
+        'input_file': 'Production/Input/dentalPlaces15thAug.csv',
+        'geocoding_input': 'Production/Geocoding-Input/dentalPlaces15thAug.csv',
+        'geocoded_output': 'Production/Geocoded/dentalPlaces15thAug_geocoded.csv',
+        'final_output': 'Production/Geocoded/dentalPlaces15thAug_geocoded_upload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'street_address',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip'
+        },
+        'dataset_name': 'dentalPlaces (Geocoded)',
+        'add_state_mi': False
+    },
+    'fqhc': {
+        'input_file': 'Production/Input/fqhcCLINICS.csv',
+        'geocoding_input': 'Production/Geocoding-Input/fqhcCLINICS.csv',
+        'geocoded_output': 'Production/Geocoded/fqhcCLINICS_geocoded.csv',
+        'final_output': 'Production/Geocoded/fqhcCLINICS_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'address',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip_code'
+        },
+        'dataset_name': 'dentalPlaces (Geocoded)',
+        'add_state_mi': False
+    },
+    'rhc': {
+        'input_file': 'Production/Input/rhcCLINICS.csv',
+        'geocoding_input': 'Production/Geocoding-Input/rhcCLINICS.csv',
+        'geocoded_output': 'Production/Geocoded/rhcCLINICS_geocoded.csv',
+        'final_output': 'Production/Geocoded/rhcCLINICS_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'address',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip'
+        },
+        'dataset_name': 'rhcCLINICS (Geocoded)',
+        'add_state_mi': False
+    },
+    'pharmacy': {
+        'input_file': 'Production/Input/pharmacyPLACES.csv',
+        'geocoding_input': 'Production/Geocoding-Input/pharmacyPLACES.csv',
+        'geocoded_output': 'Production/Geocoded/pharmacyPLACES_geocoded.csv',
+        'final_output': 'Production/Geocoded/pharmacyPLACES_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'address',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zipcode'
+        },
+        'dataset_name': 'pharmacyPLACES (Geocoded)',
+        'add_state_mi': False
+    },
+    'oralhealthPLACES': {
+        'input_file': 'Production/Input/oralhealthPLACES.csv',
+        'geocoding_input': 'Production/Geocoding-Input/oralhealthPLACES.csv',
+        'geocoded_output': 'Production/Geocoded/oralhealthPLACES_geocoded.csv',
+        'final_output': 'Production/Geocoded/oralhealthPLACES_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'street',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip'
+        },
+        'dataset_name': 'oralhealthPLACES (Geocoded)',
+        'add_state_mi': False
+    },
+    'oralhealthCLINICS': {
+        'input_file': 'Production/Input/oralhealthCLINICS.csv',
+        'geocoding_input': 'Production/Geocoding-Input/oralhealthCLINICS.csv',
+        'geocoded_output': 'Production/Geocoded/oralhealthCLINICS_geocoded.csv',
+        'final_output': 'Production/Geocoded/oralhealthCLINICS_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'street',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip'
+        },
+        'dataset_name': 'oralhealthCLINICS (Geocoded)',
+        'add_state_mi': False
+    },
+    'medicalPLACES': {
+        'input_file': 'Production/Input/medicalPLACES.csv',
+        'geocoding_input': 'Production/Geocoding-Input/medicalPLACES.csv',
+        'geocoded_output': 'Production/Geocoded/medicalPLACES_geocoded.csv',
+        'final_output': 'Production/Geocoded/medicalPLACES_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'street_address',
+            'city': 'city',
+            'state': 'state',
+            'zip': 'zip'
+        },
+        'dataset_name': 'medicalPLACES (Geocoded)',
+        'add_state_mi': False
+    },
+    'mmhcTotalCounts': {
+        'input_file': 'Production/Input/mmhctotalcounts.csv',
+        'geocoding_input': 'Production/Geocoding-Input/mmhctotalcounts.csv',
+        'geocoded_output': 'Production/Geocoded/mmhctotalcounts_geocoded.csv',
+        'final_output': 'Production/Geocoded/mmhctotalcounts_geocodedupload.csv',
+        'original_data_df': None, # To be loaded later
+        'column_map': {
+            'street': 'Address',
+            'city': 'City',
+            'state': 'State',
+            'zip': 'zipcode'
+        },
+        'dataset_name': 'MMHC Total Counts (Geocoded)',
         'add_state_mi': False
     },
 }
