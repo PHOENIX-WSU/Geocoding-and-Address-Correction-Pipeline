@@ -79,3 +79,9 @@ python main.py demographics
 
 The script will display its progress in the terminal and save the final output file in the `Production/Geocoded/` directory upon completion.
 
+#### Trailing Zeros
+If any of the final output column values have trailing zeros in them, modify the contents of the `remove_trailing_zeros.py` file, reflecting your actual file name and column names
+
+#### Potential Gotchas
+Make sure when running the code, to not modify the batch sizes for either Census or Gemini or the script might potentially get stuck (Census has a limit of 10k records per batch, better to be well below the limit)
+
